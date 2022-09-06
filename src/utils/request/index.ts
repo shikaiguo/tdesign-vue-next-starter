@@ -1,11 +1,12 @@
 // axios配置  可自行根据项目进行更改，只需更改该文件即可，其他文件可以不动
 import isString from 'lodash/isString';
 import merge from 'lodash/merge';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { AxiosTransform, CreateAxiosOptions } from './AxiosTransform';
 import { VAxios } from './Axios';
 import proxy from '@/config/proxy';
 import { joinTimestamp, formatRequestDate, setObjToUrlParams } from './utils';
-import { TOKEN_NAME } from '@/config/global';
+import { useUserStore } from '@/store';
 
 const env = import.meta.env.MODE || 'development';
 
@@ -44,7 +45,7 @@ const transform: AxiosTransform = {
     const { code } = data;
 
     // 这里逻辑可以根据项目进行修改
-    const hasSuccess = data && code === 0;
+    const hasSuccess = data && code === 200;
     if (hasSuccess) {
       return data.data;
     }
@@ -110,7 +111,7 @@ const transform: AxiosTransform = {
   // 请求拦截器处理
   requestInterceptors: (config, options) => {
     // 请求之前处理config
-    const token = localStorage.getItem(TOKEN_NAME);
+    const { token } = useUserStore();
     if (token && (config as Recordable)?.requestOptions?.withToken !== false) {
       // jwt token
       (config as Recordable).headers.Authorization = options.authenticationScheme
@@ -122,6 +123,28 @@ const transform: AxiosTransform = {
 
   // 响应拦截器处理
   responseInterceptors: (res) => {
+    const { data } = res;
+    if (data.code !== 200) {
+      const { token } = useUserStore();
+      if (data.code === 401 && token) {
+        localStorage.clear();
+        const dial = DialogPlugin.alert({
+          body: '登录已过期，请重新登录',
+          confirmBtn: {
+            theme: 'warning',
+          },
+          onConfirm: () => {
+            dial.hide();
+          },
+          onClosed: () => {
+            window.location.reload();
+          },
+        });
+        return res;
+      }
+      MessagePlugin.error(data.message);
+      throw new Error(data.message);
+    }
     return res;
   },
 
@@ -152,9 +175,9 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
       <CreateAxiosOptions>{
         // https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication#authentication_schemes
         // 例如: authenticationScheme: 'Bearer'
-        authenticationScheme: '',
+        authenticationScheme: 'Bearer',
         // 超时
-        timeout: 10 * 1000,
+        timeout: 5 * 1000,
         // 携带Cookie
         withCredentials: true,
         // 头信息
@@ -187,7 +210,7 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
           withToken: true,
           // 重试
           retry: {
-            count: 3,
+            count: 0,
             delay: 1000,
           },
         },

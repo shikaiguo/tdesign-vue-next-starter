@@ -8,7 +8,7 @@ const InitUserInfo = {
 
 export const useUserStore = defineStore('user', {
   state: () => ({
-    token: localStorage.getItem(TOKEN_NAME) || 'main_token', // 默认token不走权限
+    token: localStorage.getItem(TOKEN_NAME), // 默认token不走权限
     userInfo: InitUserInfo,
   }),
   getters: {
@@ -38,6 +38,7 @@ export const useUserStore = defineStore('user', {
         //   main_: 'main_token',
         //   dev_: 'dev_token',
         // }[password];
+        localStorage.setItem(TOKEN_NAME, 'main_token');
         return {
           code: 200,
           message: '登陆成功',
